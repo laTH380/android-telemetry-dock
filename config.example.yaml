@@ -1,0 +1,24 @@
+database_path: /data/android_telemetry_dock.sqlite3
+scan_interval_seconds: 60
+presence_confirm_seconds: 180
+absence_confirm_seconds: 600
+arrival_cooldown_seconds: 1800
+periodic_interval_seconds: 3600
+collect_on_arrival: true
+collect_periodically: true
+scan:
+  method: ping
+  cidr: 192.168.1.0/24
+  timeout_seconds: 1.0
+collectors:
+  usage_history:
+    enabled: true
+    command: dumpsys usagestats
+    raw_retention_days: 90
+devices:
+  - id: my-phone
+    display_name: My Android Phone
+    mac_address: aa:bb:cc:dd:ee:ff
+    ip_address: 192.168.1.42
+    adb_port: 5555
+    enabled: true
