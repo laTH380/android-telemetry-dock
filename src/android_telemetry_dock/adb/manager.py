@@ -19,6 +19,7 @@ class AdbResult:
 class AdbDeviceState:
     serial: str
     state: str
+    message: str | None = None
 
 
 class AdbManager:
@@ -42,12 +43,13 @@ class AdbManager:
     def connect(self, device: Device) -> AdbDeviceState:
         if not device.serial:
             self.record_event(device.id, None, "failed", "device has no IP address")
-            return AdbDeviceState("", "missing_ip")
+            return AdbDeviceState("", "missing_ip", "device has no IP address")
         result = self.run(["connect", device.serial])
         state = self.get_state(device.serial)
         status = "connected" if state == "device" else state
-        self.record_event(device.id, device.serial, status, (result.stdout + result.stderr).strip())
-        return AdbDeviceState(device.serial, state)
+        message = (result.stdout + result.stderr).strip()
+        self.record_event(device.id, device.serial, status, message)
+        return AdbDeviceState(device.serial, state, message)
 
     def devices(self) -> list[AdbDeviceState]:
         result = self.run(["devices"])

@@ -12,6 +12,7 @@ from android_telemetry_dock.presence.devices import Device
 class CollectionResult:
     raw_payload: str
     usage_events: list[dict[str, Any]] = field(default_factory=list)
+    app_usage_sessions: list[dict[str, Any]] = field(default_factory=list)
     app_usage_summaries: list[dict[str, Any]] = field(default_factory=list)
     status: str = "success"
     error_message: str | None = None

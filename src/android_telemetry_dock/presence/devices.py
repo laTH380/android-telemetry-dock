@@ -34,6 +34,10 @@ class DeviceRepository:
     def upsert_configured_devices(self, configs: list[DeviceConfig]) -> None:
         now = utc_now()
         with self.db.connect() as conn:
+            configured_ids = [device.id for device in configs]
+            if configured_ids:
+                placeholders = ",".join("?" for _ in configured_ids)
+                conn.execute(f"UPDATE devices SET enabled = 0, updated_at = ? WHERE id NOT IN ({placeholders})", (now, *configured_ids))
             for device in configs:
                 conn.execute(
                     """
@@ -48,6 +52,14 @@ class DeviceRepository:
                       updated_at=excluded.updated_at
                     """,
                     (device.id, device.display_name, device.mac_address, device.ip_address, device.adb_port, int(device.enabled), now),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO device_status(device_id, presence_state, updated_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(device_id) DO UPDATE SET updated_at=excluded.updated_at
+                    """,
+                    (device.id, "unknown", now),
                 )
 
     def list_enabled(self) -> list[Device]:
@@ -65,7 +77,81 @@ class DeviceRepository:
                 "INSERT INTO device_presence_events(device_id, event_type, ip_address, mac_address, detected_at, details) VALUES (?, ?, ?, ?, ?, ?)",
                 (device.id, event_type, ip_address or device.ip_address, device.mac_address, now, details),
             )
+            presence_state = "present" if event_type == "seen" else event_type
+            ping_status = "success" if event_type == "seen" else "failed"
+            error_message = None if ping_status == "success" else details
+            conn.execute(
+                """
+                INSERT INTO device_status(device_id, presence_state, last_ping_status, last_seen_at, last_error_message, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(device_id) DO UPDATE SET
+                  presence_state=excluded.presence_state,
+                  last_ping_status=excluded.last_ping_status,
+                  last_seen_at=CASE WHEN excluded.last_ping_status = 'success' THEN excluded.last_seen_at ELSE device_status.last_seen_at END,
+                  last_error_message=excluded.last_error_message,
+                  updated_at=excluded.updated_at
+                """,
+                (device.id, presence_state, ping_status, now, error_message, now),
+            )
 
     def mark_collected(self, device_id: str) -> None:
         now = utc_now()
-        self.db.execute("UPDATE devices SET last_collected_at=?, updated_at=? WHERE id=?", (now, now, device_id))
+        with self.db.connect() as conn:
+            conn.execute("UPDATE devices SET last_collected_at=?, updated_at=? WHERE id=?", (now, now, device_id))
+            conn.execute(
+                """
+                INSERT INTO device_status(device_id, last_collection_status, last_collected_at, last_error_message, updated_at)
+                VALUES (?, ?, ?, NULL, ?)
+                ON CONFLICT(device_id) DO UPDATE SET
+                  last_collection_status=excluded.last_collection_status,
+                  last_collected_at=excluded.last_collected_at,
+                  last_error_message=NULL,
+                  updated_at=excluded.updated_at
+                """,
+                (device_id, "success", now, now),
+            )
+
+    def mark_ping_missed(self, device: Device, presence_state: str, details: str | None = None) -> None:
+        now = utc_now()
+        self.db.execute(
+            """
+            INSERT INTO device_status(device_id, presence_state, last_ping_status, last_error_message, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(device_id) DO UPDATE SET
+              presence_state=excluded.presence_state,
+              last_ping_status=excluded.last_ping_status,
+              last_error_message=excluded.last_error_message,
+              updated_at=excluded.updated_at
+            """,
+            (device.id, presence_state, "failed", details, now),
+        )
+
+    def mark_adb_state(self, device_id: str, adb_state: str, message: str | None = None) -> None:
+        now = utc_now()
+        error_message = None if adb_state == "device" else message
+        self.db.execute(
+            """
+            INSERT INTO device_status(device_id, adb_state, last_adb_checked_at, last_error_message, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(device_id) DO UPDATE SET
+              adb_state=excluded.adb_state,
+              last_adb_checked_at=excluded.last_adb_checked_at,
+              last_error_message=excluded.last_error_message,
+              updated_at=excluded.updated_at
+            """,
+            (device_id, adb_state, now, error_message, now),
+        )
+
+    def mark_collection_status(self, device_id: str, status: str, message: str | None = None) -> None:
+        now = utc_now()
+        self.db.execute(
+            """
+            INSERT INTO device_status(device_id, last_collection_status, last_error_message, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(device_id) DO UPDATE SET
+              last_collection_status=excluded.last_collection_status,
+              last_error_message=excluded.last_error_message,
+              updated_at=excluded.updated_at
+            """,
+            (device_id, status, message, now),
+        )

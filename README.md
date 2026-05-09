@@ -74,6 +74,12 @@ uv run android-telemetry-dock --config config.yaml
 
 PowerShell を閉じずに運用する場合はこのままで十分です。Windows 起動時に自動実行したい場合は、上記コマンドをタスク スケジューラに登録してください。作業ディレクトリはこのリポジトリのルートにします。
 
+現在の監視状態を確認する場合:
+
+```powershell
+uv run android-telemetry-dock --status --config config.yaml
+```
+
 ## 設定例
 
 ```yaml
@@ -121,6 +127,24 @@ uv run android-telemetry-dock --once --config config.yaml
 uv run python -c "import sqlite3; c=sqlite3.connect('data/android_telemetry_dock.sqlite3'); print(c.execute('select device_id, status, error_message, skip_reason from collection_jobs order by id desc limit 5').fetchall())"
 ```
 
+保存済み raw payload から正規化テーブルを再作成する場合:
+
+```powershell
+uv run android-telemetry-dock --reparse-raw --config config.yaml
+```
+
+## タイムラインデータ
+
+`dumpsys usagestats` の raw payload は `raw_collection_payloads` に保存し、イベント単位の正規化データは `usage_events`、アプリ利用区間は `app_usage_sessions` に保存します。
+
+詳細は [docs/usage-timeline.md](docs/usage-timeline.md) を参照してください。
+
+## モニタリングデータ
+
+端末ごとの現在状態は `device_status` に保存します。ping の最終状態、ADB 接続状態、最後の収集状態、最後のエラーを1行で確認できます。
+
+詳細は [docs/monitoring.md](docs/monitoring.md) を参照してください。
+
 ## 取得タイミング
 
 1. 端末が ping に応答すると `candidate_present` になります。
@@ -137,10 +161,12 @@ uv run python -c "import sqlite3; c=sqlite3.connect('data/android_telemetry_dock
 
 - `devices`: 登録端末、現在 IP、ADB ポート、最終検出・最終収集時刻
 - `device_presence_events`: 検出・不在イベント履歴
+- `device_status`: 端末ごとの現在状態サマリ
 - `adb_connection_events`: ADB 接続結果
 - `collection_jobs`: Collector 実行・スキップ・失敗履歴
 - `raw_collection_payloads`: ADB から取得した生データ
 - `usage_events`: 利用履歴イベントの正規化保存先
+- `app_usage_sessions`: アプリ利用区間のタイムライン保存先
 - `app_usage_summaries`: アプリ別利用サマリーの正規化保存先
 
 ## Collector の追加

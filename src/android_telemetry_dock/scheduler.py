@@ -53,6 +53,17 @@ class Scheduler:
                 self._handle_present(result.device, state, now)
             else:
                 self._handle_absent(result.device, state, now, result.details)
+            self._update_adb_monitor_state(result.device)
+
+    def _update_adb_monitor_state(self, device: Device) -> None:
+        if not device.serial:
+            self.devices.mark_adb_state(device.id, "missing_ip", "device has no IP address")
+            return
+        try:
+            self.devices.mark_adb_state(device.id, self.adb.get_state(device.serial))
+        except Exception as exc:  # pragma: no cover - depends on host adb installation
+            LOGGER.warning("failed to check adb state for %s: %s", device.id, exc)
+            self.devices.mark_adb_state(device.id, "check_failed", str(exc))
 
     def _handle_present(self, device: Device, state: DeviceRuntimeState, now: float) -> None:
         if state.state == "absent":
@@ -74,6 +85,8 @@ class Scheduler:
         if now - state.last_absent_monotonic >= self.config.absence_confirm_seconds:
             if state.state != "absent":
                 self.devices.mark_seen(device, device.ip_address, "absent", details)
+            else:
+                self.devices.mark_ping_missed(device, "absent", details)
             state.state = "absent"
             state.first_seen_monotonic = None
             state.last_seen_monotonic = None
@@ -81,6 +94,9 @@ class Scheduler:
             state.retry_delay_seconds = 30
         elif state.state == "present":
             state.state = "offline"
+            self.devices.mark_ping_missed(device, "offline", details)
+        else:
+            self.devices.mark_ping_missed(device, state.state, details)
 
     def _maybe_collect(self, device: Device, state: DeviceRuntimeState, now: float, reason: str) -> None:
         if now < state.next_retry_monotonic:
@@ -91,6 +107,7 @@ class Scheduler:
             self._record_skipped_jobs(device.id, f"cooldown for {reason}")
             return
         adb_state = self.adb.connect(device)
+        self.devices.mark_adb_state(device.id, adb_state.state, adb_state.message)
         if adb_state.state != "device":
             state.next_retry_monotonic = now + state.retry_delay_seconds
             state.retry_delay_seconds = min(state.retry_delay_seconds * 2, 3600)
@@ -109,6 +126,7 @@ class Scheduler:
             except Exception as exc:  # pragma: no cover - defensive for daemon loop
                 LOGGER.exception("collector %s failed for %s", collector.name, device.id)
                 self._finish_job(job_id, "failed", str(exc))
+                self.devices.mark_collection_status(device.id, "failed", str(exc))
         if any_success:
             state.last_collection_monotonic = now
             state.retry_delay_seconds = 30
@@ -117,6 +135,7 @@ class Scheduler:
     def _record_skipped_jobs(self, device_id: str, reason: str) -> None:
         for collector in self.collectors:
             self._create_job(device_id, collector.name, "skipped", skip_reason=reason)
+        self.devices.mark_collection_status(device_id, "skipped", reason)
 
     def _create_job(self, device_id: str, collector_name: str, status: str, skip_reason: str | None = None) -> int:
         with self.db.connect() as conn:
@@ -137,8 +156,50 @@ class Scheduler:
             )
             for event in result.usage_events:
                 conn.execute(
-                    "INSERT INTO usage_events(job_id, device_id, package_name, event_type, event_time, duration_ms, raw_line) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (job_id, device_id, event["package_name"], event.get("event_type"), event.get("event_time"), event.get("duration_ms"), event.get("raw_line")),
+                    """
+                    INSERT OR IGNORE INTO usage_events(
+                      job_id, device_id, package_name, event_type, event_time, duration_ms,
+                      raw_line, class_name, task_root_package, task_root_class, instance_id
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        job_id,
+                        device_id,
+                        event["package_name"],
+                        event.get("event_type"),
+                        event.get("event_time"),
+                        event.get("duration_ms"),
+                        event.get("raw_line"),
+                        event.get("class_name"),
+                        event.get("task_root_package"),
+                        event.get("task_root_class"),
+                        event.get("instance_id"),
+                    ),
+                )
+            for session in result.app_usage_sessions:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO app_usage_sessions(
+                      job_id, device_id, package_name, class_name, task_root_package, task_root_class,
+                      started_at, ended_at, duration_ms, end_reason, start_event_type, end_event_type
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        job_id,
+                        device_id,
+                        session["package_name"],
+                        session.get("class_name"),
+                        session.get("task_root_package"),
+                        session.get("task_root_class"),
+                        session["started_at"],
+                        session.get("ended_at"),
+                        session.get("duration_ms"),
+                        session.get("end_reason"),
+                        session.get("start_event_type"),
+                        session.get("end_event_type"),
+                    ),
                 )
             for summary in result.app_usage_summaries:
                 conn.execute(
@@ -146,3 +207,4 @@ class Scheduler:
                     (job_id, device_id, summary["package_name"], summary.get("total_time_ms"), summary.get("last_time_used"), summary.get("window_start"), summary.get("window_end"), summary.get("raw_line")),
                 )
             conn.execute("UPDATE collection_jobs SET status=?, finished_at=?, error_message=? WHERE id=?", (result.status, utc_now(), result.error_message, job_id))
+        self.devices.mark_collection_status(device_id, result.status, result.error_message)
