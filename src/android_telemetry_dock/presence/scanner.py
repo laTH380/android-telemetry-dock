@@ -35,11 +35,15 @@ class PresenceScanner:
         return PresenceResult(device, False, device.ip_address, "no ping reply")
 
     def _ping(self, ip_address: str) -> bool:
-        flag = "-n" if platform.system().lower() == "windows" else "-c"
-        timeout_flag = "-W" if platform.system().lower() != "darwin" else "-t"
+        system = platform.system().lower()
         timeout = max(1, int(self.config.timeout_seconds))
+        if system == "windows":
+            command = ["ping", "-n", "1", "-w", str(timeout * 1000), ip_address]
+        else:
+            timeout_flag = "-t" if system == "darwin" else "-W"
+            command = ["ping", "-c", "1", timeout_flag, str(timeout), ip_address]
         result = subprocess.run(
-            ["ping", flag, "1", timeout_flag, str(timeout), ip_address],
+            command,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,

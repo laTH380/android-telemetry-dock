@@ -31,6 +31,22 @@ docker compose up -d --build
 
 `docker-compose.yml` は `network_mode: host` を使います。これにより、コンテナは自宅 PC と同じ LAN 上の端末 IP に ping / ADB 接続できます。
 
+### Android 11 以降の Wireless debugging
+
+Wireless debugging のポートは、初回ペアリング用と接続用で異なります。
+
+1. Android の Wireless debugging 画面で「ペア設定コードによるデバイスのペア設定」を開きます。
+2. 表示されたペアリング用 IP:ポートで、実行環境から一度だけ `adb pair` します。
+3. ペアリング成功後、Wireless debugging のメイン画面に戻ります。
+4. メイン画面の「IP アドレスとポート」に表示される接続用ポートを `config.yaml` の `adb_port` に設定します。
+
+```bash
+adb pair 192.168.1.42:37123
+adb connect 192.168.1.42:42193
+```
+
+`config.yaml` に設定するのは接続用ポートだけです。ペアリング用ポートとペア設定コードは一時的な値なので保存しません。
+
 ## 設定例
 
 ```yaml
@@ -54,6 +70,8 @@ devices:
     display_name: My Android Phone
     mac_address: aa:bb:cc:dd:ee:ff
     ip_address: 192.168.1.42
+    # Wireless debugging のメイン画面に表示される接続用ポート。
+    # ペア設定コード画面に出る一時的なペアリング用ポートではありません。
     adb_port: 5555
     enabled: true
 ```

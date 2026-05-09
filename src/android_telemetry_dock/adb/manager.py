@@ -30,13 +30,14 @@ class AdbManager:
     def run(self, args: Sequence[str], timeout_seconds: int | None = None) -> AdbResult:
         completed = subprocess.run(
             [self.adb_path, *args],
-            text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             timeout=timeout_seconds or self.timeout_seconds,
             check=False,
         )
-        return AdbResult(completed.returncode, completed.stdout, completed.stderr)
+        stdout = completed.stdout.decode("utf-8", errors="replace") if completed.stdout else ""
+        stderr = completed.stderr.decode("utf-8", errors="replace") if completed.stderr else ""
+        return AdbResult(completed.returncode, stdout, stderr)
 
     def connect(self, device: Device) -> AdbDeviceState:
         if not device.serial:

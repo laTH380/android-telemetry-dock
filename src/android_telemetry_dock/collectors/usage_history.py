@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from android_telemetry_dock.adb.manager import AdbManager
@@ -69,7 +69,7 @@ def _normalize_time(value: str) -> str:
     value = value.strip()
     if value.isdigit():
         try:
-            return datetime.fromtimestamp(int(value) / 1000).isoformat()
+            return datetime.fromtimestamp(int(value) / 1000, tz=timezone.utc).replace(tzinfo=None).isoformat()
         except (OverflowError, OSError, ValueError):
             return value
     return value
