@@ -145,6 +145,10 @@ uv run android-telemetry-dock --reparse-raw --config config.yaml
 
 詳細は [docs/monitoring.md](docs/monitoring.md) を参照してください。
 
+## DBアクセス
+
+SQLite DB は `data/android_telemetry_dock.sqlite3` に保存します。主要テーブル、確認用SQL、CLIでの見方は [docs/database-access.md](docs/database-access.md) を参照してください。
+
 ## 取得タイミング
 
 1. 端末が ping に応答すると `candidate_present` になります。
