@@ -1,10 +1,10 @@
 # Android Telemetry Dock
 
-Android Telemetry Dock は、自宅 PC 上の Docker コンテナで常時起動し、自宅 LAN に戻ってきた既知の Android 端末から ADB 経由でテレメトリを取得して SQLite に保存するサーバーです。
+Android Telemetry Dock は、自宅 PC 上で常駐し、自宅 LAN に戻ってきた既知の Android 端末から ADB 経由でテレメトリを取得して SQLite に保存するローカルサーバーです。
 
 ## 主な機能
 
-- Docker / docker compose による常駐起動
+- `uv` によるローカル常駐起動
 - 自宅ネットワーク上の登録済み Android 端末の在宅検出
 - 帰宅判定後の ADB 接続
 - 拡張可能な Collector インターフェース
@@ -14,43 +14,70 @@ Android Telemetry Dock は、自宅 PC 上の Docker コンテナで常時起動
 
 ## 前提条件
 
-ADB は強力な管理インターフェースです。対象 Android 端末は、事前に Wireless debugging または `adb tcpip` で自宅 PC / コンテナの ADB 鍵を認証済みにしてください。未認証端末へ勝手に接続することはできません。
+ADB は強力な管理インターフェースです。対象 Android 端末は、事前に Wireless debugging または `adb tcpip` で自宅 PC の ADB 鍵を認証済みにしてください。未認証端末へ勝手に接続することはできません。
 
 利用履歴情報には高いプライバシー性があります。必ず所有者または利用者の明示的な同意がある端末のみ登録してください。
 
-## セットアップ
+Windows では Android SDK Platform Tools の `adb.exe` を PATH に追加してください。
 
-```bash
-cp config.example.yaml config.yaml
-# config.yaml の devices と scan.cidr を自宅 LAN に合わせて編集
-mkdir -p data
-# 必要に応じて既存 ADB 鍵を配置
-cp ~/.android/adbkey ~/.android/adbkey.pub .
-docker compose up -d --build
+```powershell
+$env:PATH="$env:LOCALAPPDATA\Android\Sdk\platform-tools;$env:PATH"
+adb version
 ```
 
-`docker-compose.yml` は `network_mode: host` を使います。これにより、コンテナは自宅 PC と同じ LAN 上の端末 IP に ping / ADB 接続できます。
+## セットアップ
 
-### Android 11 以降の Wireless debugging
+```powershell
+Copy-Item config.example.yaml config.yaml
+New-Item -ItemType Directory -Force data
+uv run android-telemetry-dock --once --config config.yaml
+```
+
+`config.yaml` の `devices` と `scan.cidr` は自宅 LAN に合わせて編集してください。
+
+## Android 11 以降の Wireless debugging
 
 Wireless debugging のポートは、初回ペアリング用と接続用で異なります。
 
 1. Android の Wireless debugging 画面で「ペア設定コードによるデバイスのペア設定」を開きます。
-2. 表示されたペアリング用 IP:ポートで、実行環境から一度だけ `adb pair` します。
+2. 表示されたペアリング用 IP:ポートで、PC から一度だけ `adb pair` します。
 3. ペアリング成功後、Wireless debugging のメイン画面に戻ります。
 4. メイン画面の「IP アドレスとポート」に表示される接続用ポートを `config.yaml` の `adb_port` に設定します。
 
-```bash
+```powershell
 adb pair 192.168.1.42:37123
 adb connect 192.168.1.42:42193
+adb devices
 ```
 
 `config.yaml` に設定するのは接続用ポートだけです。ペアリング用ポートとペア設定コードは一時的な値なので保存しません。
 
+## 起動
+
+1回だけ動作確認する場合:
+
+```powershell
+uv run android-telemetry-dock --once --config config.yaml
+```
+
+常駐起動する場合:
+
+```powershell
+uv run android-telemetry-dock --config config.yaml
+```
+
+付属スクリプトから起動する場合:
+
+```powershell
+.\scripts\start-local.ps1
+```
+
+PowerShell を閉じずに運用する場合はこのままで十分です。Windows 起動時に自動実行したい場合は、上記コマンドをタスク スケジューラに登録してください。作業ディレクトリはこのリポジトリのルートにします。
+
 ## 設定例
 
 ```yaml
-database_path: /data/android_telemetry_dock.sqlite3
+database_path: data/android_telemetry_dock.sqlite3
 scan_interval_seconds: 60
 presence_confirm_seconds: 180
 absence_confirm_seconds: 600
@@ -61,10 +88,12 @@ collect_periodically: true
 scan:
   method: ping
   cidr: 192.168.1.0/24
+  timeout_seconds: 1.0
 collectors:
   usage_history:
     enabled: true
     command: dumpsys usagestats
+    raw_retention_days: 90
 devices:
   - id: my-phone
     display_name: My Android Phone
@@ -74,6 +103,22 @@ devices:
     # ペア設定コード画面に出る一時的なペアリング用ポートではありません。
     adb_port: 5555
     enabled: true
+```
+
+## 動作確認
+
+ADB 接続確認:
+
+```powershell
+adb connect 192.168.1.42:42193
+adb devices
+```
+
+収集確認:
+
+```powershell
+uv run android-telemetry-dock --once --config config.yaml
+uv run python -c "import sqlite3; c=sqlite3.connect('data/android_telemetry_dock.sqlite3'); print(c.execute('select device_id, status, error_message, skip_reason from collection_jobs order by id desc limit 5').fetchall())"
 ```
 
 ## 取得タイミング
@@ -107,4 +152,3 @@ devices:
 - ADB 鍵と Wireless debugging のペアリング情報は共有しないでください。
 - このサーバーは信頼済み自宅 LAN 内でのみ運用してください。
 - SQLite DB には利用履歴が保存されるため、OS のアクセス権限、バックアップ先、必要に応じたディスク暗号化を設定してください。
-- コンテナは LAN 検出のため host network を使います。不要なポート公開は追加しないでください。

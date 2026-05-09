@@ -1,4 +1,4 @@
-database_path: /data/android_telemetry_dock.sqlite3
+database_path: data/android_telemetry_dock.sqlite3
 scan_interval_seconds: 60
 presence_confirm_seconds: 180
 absence_confirm_seconds: 600

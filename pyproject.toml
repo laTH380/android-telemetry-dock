@@ -1,7 +1,7 @@
 [project]
 name = "android-telemetry-dock"
 version = "0.1.0"
-description = "Dockerized home-network Android telemetry collector using ADB and SQLite"
+description = "Local home-network Android telemetry collector using ADB and SQLite"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

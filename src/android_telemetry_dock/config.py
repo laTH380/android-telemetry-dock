@@ -27,7 +27,7 @@ class ScanConfig:
 
 @dataclass(frozen=True)
 class AppConfig:
-    database_path: str = "/data/android_telemetry_dock.sqlite3"
+    database_path: str = "data/android_telemetry_dock.sqlite3"
     scan_interval_seconds: int = 60
     presence_confirm_seconds: int = 180
     absence_confirm_seconds: int = 600
@@ -62,7 +62,7 @@ def load_config(path: str | os.PathLike[str] | None = None) -> AppConfig:
     scan_data = data.get("scan", {}) or {}
     devices = [DeviceConfig(**device) for device in data.get("devices", [])]
     return AppConfig(
-        database_path=str(data.get("database_path", "/data/android_telemetry_dock.sqlite3")),
+        database_path=str(data.get("database_path", "data/android_telemetry_dock.sqlite3")),
         scan_interval_seconds=int(data.get("scan_interval_seconds", 60)),
         presence_confirm_seconds=int(data.get("presence_confirm_seconds", 180)),
         absence_confirm_seconds=int(data.get("absence_confirm_seconds", 600)),
