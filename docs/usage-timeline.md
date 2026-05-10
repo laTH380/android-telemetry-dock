@@ -48,6 +48,22 @@ ADB から取得した `dumpsys usagestats` の出力を、そのまま `payload
 - `start_event_type`: 通常は `ACTIVITY_RESUMED`
 - `end_event_type`: `ACTIVITY_PAUSED`, `ACTIVITY_STOPPED`, `SCREEN_NON_INTERACTIVE` など
 
+### app_metadata
+
+パッケージ名に対応する人間向け表示名を保存します。
+
+主なカラム:
+
+- `device_id`: 端末ID
+- `package_name`: アプリのパッケージ名
+- `display_name`: 表示名。取得できない場合は `package_name`
+- `source`: `device_label`, `package_name`, `built_in` など
+- `updated_at`: 最終更新時刻
+
+タイムライン表示では `app_usage_sessions.package_name` と `app_metadata.package_name` をJOINします。
+
+表示名は `--refresh-app-metadata` で端末APKから更新します。取得できない場合は `display_name` に `package_name` を保存します。
+
 ## セッション生成ルール
 
 現在の実装では、以下のルールで `app_usage_sessions` を生成します。
@@ -62,12 +78,22 @@ ADB から取得した `dumpsys usagestats` の出力を、そのまま `payload
 アプリ利用区間:
 
 ```sql
-SELECT package_name, class_name, started_at, ended_at, duration_ms, end_reason
-FROM app_usage_sessions
-WHERE device_id = 'Mobile-Maruka-S24'
-  AND started_at >= '2026-05-08T00:00:00'
-  AND started_at < '2026-05-09T00:00:00'
-ORDER BY started_at;
+SELECT
+  COALESCE(m.display_name, s.package_name) AS app_name,
+  s.package_name,
+  s.class_name,
+  s.started_at,
+  s.ended_at,
+  s.duration_ms,
+  s.end_reason
+FROM app_usage_sessions s
+LEFT JOIN app_metadata m
+  ON m.device_id = s.device_id
+ AND m.package_name = s.package_name
+WHERE s.device_id = 'Mobile-Maruka-S24'
+  AND s.started_at >= '2026-05-08T00:00:00'
+  AND s.started_at < '2026-05-09T00:00:00'
+ORDER BY s.started_at;
 ```
 
 画面ON/OFFや通知を含むイベント列:

@@ -59,6 +59,15 @@ Collector の実行結果に応じて、以下を更新します。
 uv run android-telemetry-dock --status --config config.yaml
 ```
 
+`adb_state` が `disconnected` の場合は、まず固定ポートへ接続できるか確認します。
+
+```powershell
+Test-NetConnection 192.168.1.42 -Port 5555
+adb connect 192.168.1.42:5555
+```
+
+端末再起動後などに `5555` が閉じている場合は、USB接続して `adb tcpip 5555` を再実行してください。
+
 ## 関連する履歴テーブル
 
 `device_status` は現在状態のサマリです。過去の詳細履歴は以下を参照します。

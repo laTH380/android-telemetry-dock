@@ -114,3 +114,10 @@ def test_save_result_persists_timeline_events_and_sessions(tmp_path):
     session = db.fetchall("SELECT package_name, started_at, ended_at, duration_ms, end_reason FROM app_usage_sessions")[0]
     assert tuple(event) == ("com.example.app", "2026-05-08T19:24:44", "com.example.MainActivity", "123")
     assert tuple(session) == ("com.example.app", "2026-05-08T19:24:44", "2026-05-08T19:25:44", 60000, "activity_paused")
+
+
+def test_app_metadata_backfilled_from_usage_events(tmp_path):
+    db = Database(str(tmp_path / "dock.sqlite3"))
+    db.initialize()
+    columns = [row["name"] for row in db.fetchall("PRAGMA table_info(app_metadata)")]
+    assert columns == ["device_id", "package_name", "display_name", "source", "first_seen_at", "last_seen_at", "updated_at"]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from android_telemetry_dock.collectors.usage_history import parse_usage_stats
+from android_telemetry_dock.presence.devices import utc_now
 from android_telemetry_dock.storage.db import Database
 
 
@@ -27,6 +28,15 @@ def reparse_usage_history_raw_payloads(db: Database) -> int:
             job_id = int(row["job_id"])
             device_id = str(row["device_id"])
             events, sessions, summaries = parse_usage_stats(str(row["payload"]))
+            package_names = {
+                str(package_name)
+                for package_name in [
+                    *(event.get("package_name") for event in events),
+                    *(session.get("package_name") for session in sessions),
+                    *(summary.get("package_name") for summary in summaries),
+                ]
+                if package_name
+            }
 
             for event in events:
                 conn.execute(
@@ -94,6 +104,20 @@ def reparse_usage_history_raw_payloads(db: Database) -> int:
                         summary.get("window_end"),
                         summary.get("raw_line"),
                     ),
+                )
+            now = utc_now()
+            for package_name in sorted(package_names):
+                display_name = "Android System" if package_name == "android" else package_name
+                source = "built_in" if package_name == "android" else "package_name"
+                conn.execute(
+                    """
+                    INSERT INTO app_metadata(device_id, package_name, display_name, source, first_seen_at, last_seen_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(device_id, package_name) DO UPDATE SET
+                      last_seen_at=excluded.last_seen_at,
+                      updated_at=excluded.updated_at
+                    """,
+                    (device_id, package_name, display_name, source, now, now, now),
                 )
             jobs_reparsed += 1
     return jobs_reparsed

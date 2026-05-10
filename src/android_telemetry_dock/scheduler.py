@@ -6,6 +6,7 @@ import logging
 import time
 
 from android_telemetry_dock.adb.manager import AdbManager
+from android_telemetry_dock.collectors.app_metadata import known_package_names, upsert_app_metadata_fallback
 from android_telemetry_dock.collectors.base import Collector, CollectionResult
 from android_telemetry_dock.config import AppConfig
 from android_telemetry_dock.presence.devices import Device, DeviceRepository, utc_now
@@ -122,6 +123,7 @@ class Scheduler:
             try:
                 result = collector.collect(device, self.adb)
                 self._save_result(job_id, device.id, collector.name, result)
+                upsert_app_metadata_fallback(self.db, device.id, known_package_names(result))
                 any_success = any_success or result.status in {"success", "partial_success"}
             except Exception as exc:  # pragma: no cover - defensive for daemon loop
                 LOGGER.exception("collector %s failed for %s", collector.name, device.id)

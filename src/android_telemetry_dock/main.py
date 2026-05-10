@@ -4,6 +4,7 @@ import argparse
 import logging
 
 from android_telemetry_dock.adb.manager import AdbManager
+from android_telemetry_dock.collectors.app_metadata import refresh_app_metadata
 from android_telemetry_dock.collectors.registry import build_collectors
 from android_telemetry_dock.config import load_config
 from android_telemetry_dock.maintenance import reparse_usage_history_raw_payloads
@@ -66,11 +67,34 @@ def print_device_status(config_path: str | None = None) -> None:
         print(f"  updated: {row['updated_at'] or '-'}")
 
 
+def refresh_metadata(config_path: str | None = None, limit: int = 25) -> None:
+    config = load_config(config_path)
+    db = Database(config.database_path)
+    db.initialize()
+    devices = DeviceRepository(db)
+    devices.upsert_configured_devices(config.devices)
+    adb = AdbManager(db)
+    package_rows = db.fetchall(
+        """
+        SELECT package_name
+        FROM app_usage_sessions
+        GROUP BY package_name
+        ORDER BY SUM(duration_ms) DESC
+        """
+    )
+    package_names = {row["package_name"] for row in package_rows}
+    for device in devices.list_enabled():
+        count = refresh_app_metadata(db, device, adb, package_names, limit=limit if limit > 0 else None)
+        logging.getLogger(__name__).info("refreshed %s app display names for %s", count, device.id)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Collect Android telemetry from known home-network devices")
     parser.add_argument("--config", help="Path to YAML config. Defaults to ATD_CONFIG or ./config.yaml")
     parser.add_argument("--once", action="store_true", help="Run one scheduler tick and exit")
     parser.add_argument("--reparse-raw", action="store_true", help="Rebuild normalized usage tables from saved raw payloads and exit")
+    parser.add_argument("--refresh-app-metadata", action="store_true", help="Refresh app display names from device APK metadata and exit")
+    parser.add_argument("--metadata-limit", type=int, default=25, help="Maximum packages to inspect when refreshing app metadata. Use 0 for all.")
     parser.add_argument("--status", action="store_true", help="Print current device monitoring status and exit")
     parser.add_argument("--log-level", default="INFO", help="Python logging level")
     args = parser.parse_args()
@@ -84,6 +108,9 @@ def main() -> None:
         db.initialize()
         count = reparse_usage_history_raw_payloads(db)
         logging.getLogger(__name__).info("reparsed %s usage_history raw payloads", count)
+        return
+    if args.refresh_app_metadata:
+        refresh_metadata(args.config, args.metadata_limit)
         return
     scheduler = build_scheduler(args.config)
     if args.once:

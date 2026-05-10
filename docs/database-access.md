@@ -102,6 +102,16 @@ ORDER BY started_at DESC
 LIMIT 50;
 ```
 
+### app_metadata
+
+パッケージ名に対する人間向け表示名です。
+
+```sql
+SELECT device_id, package_name, display_name, source, updated_at
+FROM app_metadata
+ORDER BY display_name;
+```
+
 ## よく使うSQL
 
 ### 現在状態を見る
@@ -144,19 +154,44 @@ WHERE device_id = 'Mobile-Maruka-S24'
 ORDER BY started_at;
 ```
 
+### 1日のアプリ利用タイムラインを表示名付きで見る
+
+```sql
+SELECT
+  COALESCE(m.display_name, s.package_name) AS app_name,
+  s.package_name,
+  s.class_name,
+  s.started_at,
+  s.ended_at,
+  s.duration_ms,
+  s.end_reason
+FROM app_usage_sessions s
+LEFT JOIN app_metadata m
+  ON m.device_id = s.device_id
+ AND m.package_name = s.package_name
+WHERE s.device_id = 'Mobile-Maruka-S24'
+  AND s.started_at >= '2026-05-08T00:00:00'
+  AND s.started_at < '2026-05-09T00:00:00'
+ORDER BY s.started_at;
+```
+
 ### 1日のアプリ別利用時間を見る
 
 ```sql
 SELECT
-  package_name,
+  COALESCE(m.display_name, s.package_name) AS app_name,
+  s.package_name,
   COUNT(*) AS session_count,
-  ROUND(SUM(duration_ms) / 1000.0 / 60.0, 1) AS minutes
-FROM app_usage_sessions
-WHERE device_id = 'Mobile-Maruka-S24'
-  AND started_at >= '2026-05-08T00:00:00'
-  AND started_at < '2026-05-09T00:00:00'
-GROUP BY package_name
-ORDER BY SUM(duration_ms) DESC;
+  ROUND(SUM(s.duration_ms) / 1000.0 / 60.0, 1) AS minutes
+FROM app_usage_sessions s
+LEFT JOIN app_metadata m
+  ON m.device_id = s.device_id
+ AND m.package_name = s.package_name
+WHERE s.device_id = 'Mobile-Maruka-S24'
+  AND s.started_at >= '2026-05-08T00:00:00'
+  AND s.started_at < '2026-05-09T00:00:00'
+GROUP BY app_name, s.package_name
+ORDER BY SUM(s.duration_ms) DESC;
 ```
 
 ### 通知や画面ON/OFFを含むイベント列を見る
@@ -182,6 +217,22 @@ uv run android-telemetry-dock --status --config config.yaml
 
 ```powershell
 uv run android-telemetry-dock --reparse-raw --config config.yaml
+```
+
+アプリの人間向け表示名を端末APKから更新する場合:
+
+```powershell
+uv run android-telemetry-dock --refresh-app-metadata --metadata-limit 25 --config config.yaml
+```
+
+`--metadata-limit 0` を指定すると全パッケージを対象にします。APKを一時的にPCへpullして表示名を読むため、対象数が多いと時間がかかります。
+
+ADB固定ポート化も初回だけ手作業で行います。USB接続した状態で `adb tcpip 5555` を実行し、以後は `config.yaml` の `adb_port` に `5555` を設定します。
+
+```powershell
+adb devices
+adb -s RFCX40MXASN tcpip 5555
+adb connect 192.168.1.42:5555
 ```
 
 ## 注意点
