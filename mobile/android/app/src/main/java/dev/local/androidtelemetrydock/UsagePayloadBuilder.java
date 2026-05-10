@@ -87,7 +87,7 @@ final class UsagePayloadBuilder {
 
         JSONObject payload = new JSONObject()
                 .put("device_id", TelemetrySettings.deviceId(context))
-                .put("device_name", android.os.Build.MODEL)
+                .put("device_name", TelemetrySettings.deviceName(context))
                 .put("collected_at", iso(System.currentTimeMillis()))
                 .put("window_start", iso(startMillis))
                 .put("window_end", iso(endMillis))

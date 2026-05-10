@@ -70,7 +70,7 @@ public class MainActivity extends Activity {
         scheduleButton.setOnClickListener(v -> {
             TelemetryScheduler.schedule(this);
             TelemetryScheduler.runSoon(this);
-            setStatus("Scheduled. The app sends on unmetered network and retries through JobScheduler.");
+            setStatus("Scheduled. The app sends through JobScheduler and retries after failures.");
         });
         layout.addView(scheduleButton, matchWrap());
 
@@ -84,7 +84,8 @@ public class MainActivity extends Activity {
     }
 
     private void refreshStatus() {
-        setStatus("Usage access: " + (TelemetryUploader.hasUsageAccess(this) ? "granted" : "not granted"));
+        setStatus("Usage access: " + (TelemetryUploader.hasUsageAccess(this) ? "granted" : "not granted")
+                + "\nLast upload: " + TelemetrySettings.lastUploadStatus(this));
     }
 
     private void sendNow() {
@@ -97,9 +98,14 @@ public class MainActivity extends Activity {
                 int events = summary.getInt("total_events");
                 int sessions = summary.getInt("total_sessions");
                 boolean complete = summary.getBoolean("complete");
-                runOnUiThread(() -> setStatus("Uploaded chunks=" + chunks + " events=" + events + " sessions=" + sessions + " complete=" + complete));
+                boolean recentWindowSent = summary.optBoolean("recent_window_sent");
+                String status = "manual success chunks=" + chunks + " events=" + events + " sessions=" + sessions + " recent=" + recentWindowSent + " complete=" + complete + " at " + UsagePayloadBuilder.iso(System.currentTimeMillis());
+                TelemetrySettings.saveLastUploadStatus(this, status);
+                runOnUiThread(() -> setStatus(status));
             } catch (Exception ex) {
-                runOnUiThread(() -> setStatus("Upload failed: " + ex.getMessage()));
+                String status = "manual failed: " + ex.getMessage() + " at " + UsagePayloadBuilder.iso(System.currentTimeMillis());
+                TelemetrySettings.saveLastUploadStatus(this, status);
+                runOnUiThread(() -> setStatus(status));
             }
         }).start();
     }

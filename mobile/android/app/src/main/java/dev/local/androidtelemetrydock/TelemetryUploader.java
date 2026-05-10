@@ -45,12 +45,23 @@ final class TelemetryUploader {
             lastWindowEnd = end;
             cursor = end;
         }
+        long recentStart = Math.max(0L, now - INITIAL_LOOKBACK_MS);
+        boolean recentWindowAlreadyCovered = recentStart >= firstWindowStart && now <= lastWindowEnd;
+        if (!recentWindowAlreadyCovered) {
+            JSONObject payload = UsagePayloadBuilder.build(context, recentStart, now);
+            post(context, payload);
+            chunks++;
+            totalEvents += payload.getJSONArray("events").length();
+            totalSessions += payload.getJSONArray("sessions").length();
+        }
         return new JSONObject()
                 .put("chunks", chunks)
                 .put("total_events", totalEvents)
                 .put("total_sessions", totalSessions)
                 .put("window_start", UsagePayloadBuilder.iso(firstWindowStart))
                 .put("window_end", UsagePayloadBuilder.iso(lastWindowEnd))
+                .put("recent_window_sent", true)
+                .put("recent_window_extra", !recentWindowAlreadyCovered)
                 .put("complete", lastWindowEnd >= now);
     }
 

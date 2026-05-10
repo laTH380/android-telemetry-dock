@@ -74,7 +74,7 @@ http://10.0.2.2:8080
 
 その後、`Open usage access settings` から Usage Access を許可します。
 
-手動確認は `Send now`、定期送信は `Schedule every 15 minutes` を押します。定期送信は Android の `JobScheduler` を使うため、実行時刻は端末の省電力制御により多少遅れることがあります。
+手動確認は `Send now`、定期送信は `Schedule every 15 minutes` を押します。定期送信は Android の `JobScheduler` を使うため、実行時刻は端末の省電力制御により多少遅れることがあります。アプリを再インストールした後はジョブ登録が消えるため、再度 `Schedule every 15 minutes` を押してください。
 
 詳細は [docs/mobile-app.md](docs/mobile-app.md) を参照してください。
 
@@ -139,6 +139,7 @@ SQLite DB は `data/android_telemetry_dock.sqlite3` に保存します。
 - 端末再起動後は `BOOT_COMPLETED` で再スケジュール
 - PC API に到達できない場合は失敗として記録され、次回ジョブで再送信
 - 端末側は最後に成功した送信範囲を保存し、次回はその続きから1時間単位で追いつき送信
+- 未送信分が溜まっていても、毎回直近1時間分は送信
 - PC 側 DB は一意インデックスと `INSERT OR IGNORE` で重複イベント・重複セッションを抑止
 
 ## セキュリティ運用

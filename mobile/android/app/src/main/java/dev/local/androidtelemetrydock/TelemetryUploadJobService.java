@@ -9,8 +9,10 @@ public class TelemetryUploadJobService extends JobService {
         new Thread(() -> {
             boolean retry = false;
             try {
-                TelemetryUploader.upload(this);
-            } catch (Exception ignored) {
+                org.json.JSONObject summary = TelemetryUploader.upload(this);
+                TelemetrySettings.saveLastUploadStatus(this, "background success chunks=" + summary.optInt("chunks") + " recent=" + summary.optBoolean("recent_window_sent") + " complete=" + summary.optBoolean("complete") + " at " + UsagePayloadBuilder.iso(System.currentTimeMillis()));
+            } catch (Exception ex) {
+                TelemetrySettings.saveLastUploadStatus(this, "background failed: " + ex.getMessage() + " at " + UsagePayloadBuilder.iso(System.currentTimeMillis()));
                 retry = true;
             }
             jobFinished(params, retry);

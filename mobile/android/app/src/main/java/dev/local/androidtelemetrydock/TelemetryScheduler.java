@@ -15,7 +15,7 @@ final class TelemetryScheduler {
     static void schedule(Context context) {
         ComponentName component = new ComponentName(context, TelemetryUploadJobService.class);
         JobInfo jobInfo = new JobInfo.Builder(JOB_ID, component)
-                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
+                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                 .setPersisted(true)
                 .setPeriodic(FIFTEEN_MINUTES_MS)
                 .build();
