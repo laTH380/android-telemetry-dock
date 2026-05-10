@@ -9,6 +9,7 @@ final class TelemetrySettings {
     private static final String SERVER_URL = "server_url";
     private static final String AUTH_TOKEN = "auth_token";
     private static final String DEVICE_ID = "device_id";
+    private static final String LAST_SUCCESSFUL_WINDOW_END_MS = "last_successful_window_end_ms";
 
     private TelemetrySettings() {
     }
@@ -35,6 +36,16 @@ final class TelemetrySettings {
                 .putString(SERVER_URL, trimTrailingSlash(serverUrl))
                 .putString(AUTH_TOKEN, authToken)
                 .putString(DEVICE_ID, deviceId)
+                .apply();
+    }
+
+    static long lastSuccessfulWindowEndMillis(Context context) {
+        return prefs(context).getLong(LAST_SUCCESSFUL_WINDOW_END_MS, 0L);
+    }
+
+    static void saveLastSuccessfulWindowEndMillis(Context context, long windowEndMillis) {
+        prefs(context).edit()
+                .putLong(LAST_SUCCESSFUL_WINDOW_END_MS, windowEndMillis)
                 .apply();
     }
 

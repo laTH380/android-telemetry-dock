@@ -11,6 +11,32 @@ from android_telemetry_dock.storage.db import Database
 LOGGER = logging.getLogger(__name__)
 
 
+def _metadata_update_sql() -> str:
+    return """
+        INSERT INTO app_metadata(device_id, package_name, display_name, source, first_seen_at, last_seen_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(device_id, package_name) DO UPDATE SET
+          display_name=CASE
+            WHEN excluded.display_name = excluded.package_name
+             AND app_metadata.display_name IS NOT NULL
+             AND app_metadata.display_name != ''
+             AND app_metadata.display_name != app_metadata.package_name
+            THEN app_metadata.display_name
+            ELSE excluded.display_name
+          END,
+          source=CASE
+            WHEN excluded.display_name = excluded.package_name
+             AND app_metadata.display_name IS NOT NULL
+             AND app_metadata.display_name != ''
+             AND app_metadata.display_name != app_metadata.package_name
+            THEN app_metadata.source
+            ELSE excluded.source
+          END,
+          last_seen_at=excluded.last_seen_at,
+          updated_at=excluded.updated_at
+        """
+
+
 class TelemetryApiServer:
     def __init__(self, db: Database, host: str, port: int, auth_token: str | None = None) -> None:
         self.db = db
@@ -101,15 +127,7 @@ def save_mobile_usage_payload(db: Database, data: dict[str, Any], raw_payload: s
             package_name = str(event["package_name"])
             display_name_value = str(event.get("display_name") or package_name)
             conn.execute(
-                """
-                INSERT INTO app_metadata(device_id, package_name, display_name, source, first_seen_at, last_seen_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(device_id, package_name) DO UPDATE SET
-                  display_name=excluded.display_name,
-                  source=excluded.source,
-                  last_seen_at=excluded.last_seen_at,
-                  updated_at=excluded.updated_at
-                """,
+                _metadata_update_sql(),
                 (device_id, package_name, display_name_value, "mobile", now, now, now),
             )
             conn.execute(
@@ -138,15 +156,7 @@ def save_mobile_usage_payload(db: Database, data: dict[str, Any], raw_payload: s
             package_name = str(session["package_name"])
             display_name_value = str(session.get("display_name") or package_name)
             conn.execute(
-                """
-                INSERT INTO app_metadata(device_id, package_name, display_name, source, first_seen_at, last_seen_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(device_id, package_name) DO UPDATE SET
-                  display_name=excluded.display_name,
-                  source=excluded.source,
-                  last_seen_at=excluded.last_seen_at,
-                  updated_at=excluded.updated_at
-                """,
+                _metadata_update_sql(),
                 (device_id, package_name, display_name_value, "mobile", now, now, now),
             )
             conn.execute(

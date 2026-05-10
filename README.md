@@ -134,10 +134,11 @@ SQLite DB は `data/android_telemetry_dock.sqlite3` に保存します。
 
 ## 送信タイミング
 
-- `Send now` で直近1時間分を即時送信
+- `Send now` で未送信分を即時送信
 - `Schedule every 15 minutes` で定期送信を登録
 - 端末再起動後は `BOOT_COMPLETED` で再スケジュール
 - PC API に到達できない場合は失敗として記録され、次回ジョブで再送信
+- 端末側は最後に成功した送信範囲を保存し、次回はその続きから1時間単位で追いつき送信
 - PC 側 DB は一意インデックスと `INSERT OR IGNORE` で重複イベント・重複セッションを抑止
 
 ## セキュリティ運用

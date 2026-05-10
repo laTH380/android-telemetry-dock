@@ -92,10 +92,12 @@ public class MainActivity extends Activity {
         setStatus("Sending...");
         new Thread(() -> {
             try {
-                JSONObject payload = TelemetryUploader.upload(this);
-                int events = payload.getJSONArray("events").length();
-                int sessions = payload.getJSONArray("sessions").length();
-                runOnUiThread(() -> setStatus("Uploaded events=" + events + " sessions=" + sessions));
+                JSONObject summary = TelemetryUploader.upload(this);
+                int chunks = summary.getInt("chunks");
+                int events = summary.getInt("total_events");
+                int sessions = summary.getInt("total_sessions");
+                boolean complete = summary.getBoolean("complete");
+                runOnUiThread(() -> setStatus("Uploaded chunks=" + chunks + " events=" + events + " sessions=" + sessions + " complete=" + complete));
             } catch (Exception ex) {
                 runOnUiThread(() -> setStatus("Upload failed: " + ex.getMessage()));
             }

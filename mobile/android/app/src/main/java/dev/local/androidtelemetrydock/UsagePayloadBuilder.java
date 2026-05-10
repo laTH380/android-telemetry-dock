@@ -79,6 +79,11 @@ final class UsagePayloadBuilder {
                 activeSessions.clear();
             }
         }
+        String windowEnd = iso(endMillis);
+        for (JSONObject session : activeSessions.values()) {
+            closeSession(session, windowEnd, endMillis, "window_end", "WINDOW_END");
+            sessionsJson.put(session);
+        }
 
         JSONObject payload = new JSONObject()
                 .put("device_id", TelemetrySettings.deviceId(context))
@@ -110,7 +115,7 @@ final class UsagePayloadBuilder {
         }
     }
 
-    private static String iso(long millis) {
+    static String iso(long millis) {
         return Instant.ofEpochMilli(millis).toString();
     }
 

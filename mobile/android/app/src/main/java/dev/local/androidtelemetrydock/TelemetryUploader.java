@@ -15,7 +15,10 @@ import java.net.URL;
 import java.util.List;
 
 final class TelemetryUploader {
-    private static final long LOOKBACK_MS = 60L * 60L * 1000L;
+    private static final long INITIAL_LOOKBACK_MS = 60L * 60L * 1000L;
+    private static final long CHUNK_MS = 60L * 60L * 1000L;
+    private static final long OVERLAP_MS = 5L * 60L * 1000L;
+    private static final int MAX_CHUNKS_PER_UPLOAD = 24;
 
     private TelemetryUploader() {
     }
@@ -25,10 +28,38 @@ final class TelemetryUploader {
             throw new IllegalStateException("Usage access is not granted");
         }
         long now = System.currentTimeMillis();
-        long start = now - LOOKBACK_MS;
-        JSONObject payload = UsagePayloadBuilder.build(context, start, now);
-        post(context, payload);
-        return payload;
+        long cursor = startMillis(context, now);
+        int chunks = 0;
+        int totalEvents = 0;
+        int totalSessions = 0;
+        long firstWindowStart = cursor;
+        long lastWindowEnd = cursor;
+        while (cursor < now && chunks < MAX_CHUNKS_PER_UPLOAD) {
+            long end = Math.min(cursor + CHUNK_MS, now);
+            JSONObject payload = UsagePayloadBuilder.build(context, cursor, end);
+            post(context, payload);
+            TelemetrySettings.saveLastSuccessfulWindowEndMillis(context, end);
+            chunks++;
+            totalEvents += payload.getJSONArray("events").length();
+            totalSessions += payload.getJSONArray("sessions").length();
+            lastWindowEnd = end;
+            cursor = end;
+        }
+        return new JSONObject()
+                .put("chunks", chunks)
+                .put("total_events", totalEvents)
+                .put("total_sessions", totalSessions)
+                .put("window_start", UsagePayloadBuilder.iso(firstWindowStart))
+                .put("window_end", UsagePayloadBuilder.iso(lastWindowEnd))
+                .put("complete", lastWindowEnd >= now);
+    }
+
+    private static long startMillis(Context context, long now) {
+        long lastSuccessfulWindowEnd = TelemetrySettings.lastSuccessfulWindowEndMillis(context);
+        if (lastSuccessfulWindowEnd <= 0L || lastSuccessfulWindowEnd > now) {
+            return now - INITIAL_LOOKBACK_MS;
+        }
+        return Math.max(0L, lastSuccessfulWindowEnd - OVERLAP_MS);
     }
 
     static boolean hasUsageAccess(Context context) {
