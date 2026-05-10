@@ -4,6 +4,7 @@ import argparse
 import logging
 
 from android_telemetry_dock.adb.manager import AdbManager
+from android_telemetry_dock.api_server import TelemetryApiServer
 from android_telemetry_dock.collectors.app_metadata import refresh_app_metadata
 from android_telemetry_dock.collectors.registry import build_collectors
 from android_telemetry_dock.config import load_config
@@ -30,19 +31,15 @@ def print_device_status(config_path: str | None = None) -> None:
     config = load_config(config_path)
     db = Database(config.database_path)
     db.initialize()
-    DeviceRepository(db).upsert_configured_devices(config.devices)
     rows = db.fetchall(
         """
         SELECT
           d.id,
           d.display_name,
           d.current_ip,
-          d.adb_port,
           s.presence_state,
           s.last_ping_status,
           s.last_seen_at,
-          s.adb_state,
-          s.last_adb_checked_at,
           s.last_collection_status,
           s.last_collected_at,
           s.last_error_message,
@@ -58,9 +55,10 @@ def print_device_status(config_path: str | None = None) -> None:
         return
     for row in rows:
         print(f"{row['id']} ({row['display_name']})")
-        print(f"  endpoint: {row['current_ip']}:{row['adb_port']}")
-        print(f"  presence: {row['presence_state'] or 'unknown'} / ping={row['last_ping_status'] or 'unknown'} / last_seen={row['last_seen_at'] or '-'}")
-        print(f"  adb: {row['adb_state'] or 'unknown'} / checked={row['last_adb_checked_at'] or '-'}")
+        if row["current_ip"]:
+            print(f"  endpoint: {row['current_ip']}")
+        if row["presence_state"] or row["last_ping_status"] or row["last_seen_at"]:
+            print(f"  presence: {row['presence_state'] or 'unknown'} / ping={row['last_ping_status'] or 'unknown'} / last_seen={row['last_seen_at'] or '-'}")
         print(f"  collection: {row['last_collection_status'] or 'unknown'} / last_collected={row['last_collected_at'] or '-'}")
         if row["last_error_message"]:
             print(f"  last_error: {row['last_error_message']}")
@@ -89,13 +87,17 @@ def refresh_metadata(config_path: str | None = None, limit: int = 25) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Collect Android telemetry from known home-network devices")
+    parser = argparse.ArgumentParser(description="Receive Android telemetry from the mobile app and store it in SQLite")
     parser.add_argument("--config", help="Path to YAML config. Defaults to ATD_CONFIG or ./config.yaml")
     parser.add_argument("--once", action="store_true", help="Run one scheduler tick and exit")
     parser.add_argument("--reparse-raw", action="store_true", help="Rebuild normalized usage tables from saved raw payloads and exit")
     parser.add_argument("--refresh-app-metadata", action="store_true", help="Refresh app display names from device APK metadata and exit")
     parser.add_argument("--metadata-limit", type=int, default=25, help="Maximum packages to inspect when refreshing app metadata. Use 0 for all.")
     parser.add_argument("--status", action="store_true", help="Print current device monitoring status and exit")
+    parser.add_argument("--serve-api", action="store_true", help="Run local HTTP API for mobile telemetry uploads")
+    parser.add_argument("--api-host", default="0.0.0.0", help="Host for --serve-api")
+    parser.add_argument("--api-port", type=int, default=8080, help="Port for --serve-api")
+    parser.add_argument("--api-token", help="Bearer token required by --serve-api")
     parser.add_argument("--log-level", default="INFO", help="Python logging level")
     args = parser.parse_args()
     logging.basicConfig(level=getattr(logging, args.log_level.upper(), logging.INFO), format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -111,6 +113,12 @@ def main() -> None:
         return
     if args.refresh_app_metadata:
         refresh_metadata(args.config, args.metadata_limit)
+        return
+    if args.serve_api:
+        config = load_config(args.config)
+        db = Database(config.database_path)
+        db.initialize()
+        TelemetryApiServer(db, args.api_host, args.api_port, args.api_token).serve_forever()
         return
     scheduler = build_scheduler(args.config)
     if args.once:

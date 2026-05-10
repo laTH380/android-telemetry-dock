@@ -1,0 +1,2 @@
+[console_scripts]
+android-telemetry-dock = android_telemetry_dock.main:main

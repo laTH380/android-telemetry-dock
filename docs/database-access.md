@@ -53,8 +53,7 @@ ORDER BY device_id;
 
 主な用途:
 
-- 端末が ping で見えているか
-- ADB が接続済みか
+- 最後に Android アプリから送信が成功した時刻
 - 最後の収集が成功したか
 - 最後のエラーやスキップ理由の確認
 
@@ -71,7 +70,7 @@ LIMIT 20;
 
 ### raw_collection_payloads
 
-ADB から取得した生データです。再パースやデバッグ用に使います。
+Android アプリから受け取った raw JSON です。再パースやデバッグ用に使います。
 
 ```sql
 SELECT id, job_id, device_id, collector_name, length(payload) AS payload_bytes, collected_at
@@ -82,7 +81,7 @@ LIMIT 20;
 
 ### usage_events
 
-`dumpsys usagestats` のイベント単位の正規化データです。
+Android アプリから受け取った利用履歴イベントの正規化データです。
 
 ```sql
 SELECT event_time, event_type, package_name, class_name
@@ -120,10 +119,8 @@ ORDER BY display_name;
 SELECT
   d.display_name,
   d.current_ip,
-  d.adb_port,
   s.presence_state,
   s.last_ping_status,
-  s.adb_state,
   s.last_collection_status,
   s.last_seen_at,
   s.last_collected_at,
@@ -219,21 +216,7 @@ uv run android-telemetry-dock --status --config config.yaml
 uv run android-telemetry-dock --reparse-raw --config config.yaml
 ```
 
-アプリの人間向け表示名を端末APKから更新する場合:
-
-```powershell
-uv run android-telemetry-dock --refresh-app-metadata --metadata-limit 25 --config config.yaml
-```
-
-`--metadata-limit 0` を指定すると全パッケージを対象にします。APKを一時的にPCへpullして表示名を読むため、対象数が多いと時間がかかります。
-
-ADB固定ポート化も初回だけ手作業で行います。USB接続した状態で `adb tcpip 5555` を実行し、以後は `config.yaml` の `adb_port` に `5555` を設定します。
-
-```powershell
-adb devices
-adb -s RFCX40MXASN tcpip 5555
-adb connect 192.168.1.42:5555
-```
+アプリの人間向け表示名は Android アプリの送信 payload に含まれ、`app_metadata` に保存されます。
 
 ## 注意点
 

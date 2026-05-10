@@ -1,22 +1,22 @@
 # Usage Timeline Data
 
-Android Telemetry Dock は `dumpsys usagestats` の出力を、再処理用の raw payload と、下流で扱いやすい正規化済みデータの両方として保存します。
+Android Telemetry Dock は Android アプリから送信された利用履歴 JSON を、再処理用の raw payload と、下流で扱いやすい正規化済みデータの両方として保存します。
 
 ## 保存レイヤー
 
 ### raw_collection_payloads
 
-ADB から取得した `dumpsys usagestats` の出力を、そのまま `payload` に保存します。
+Android アプリから受け取った JSON を、そのまま `payload` に保存します。
 
 用途:
 
 - パーサー改善後の再パース
-- 端末や Android バージョンごとの出力差分調査
+- 端末や Android バージョンごとのイベント差分調査
 - 正規化データに欠落があった場合の確認
 
 ### usage_events
 
-`dumpsys usagestats` の各イベント行を正規化して保存します。
+Android アプリが `UsageStatsManager` から取得した各イベントを正規化して保存します。
 
 主なカラム:
 
@@ -28,7 +28,7 @@ ADB から取得した `dumpsys usagestats` の出力を、そのまま `payload
 - `task_root_package`: task root package
 - `task_root_class`: task root class
 - `instance_id`: Android が出力する Activity instance ID
-- `raw_line`: 元の1行
+- `raw_line`: 旧 raw 形式用の元行。Android アプリ送信では空になる場合があります。
 
 通知、画面ON/OFF、ロック解除、アプリ状態遷移などのイベント単位のタイムラインにはこのテーブルを使います。
 
@@ -62,7 +62,7 @@ ADB から取得した `dumpsys usagestats` の出力を、そのまま `payload
 
 タイムライン表示では `app_usage_sessions.package_name` と `app_metadata.package_name` をJOINします。
 
-表示名は `--refresh-app-metadata` で端末APKから更新します。取得できない場合は `display_name` に `package_name` を保存します。
+表示名は Android アプリが `PackageManager` から取得して送信します。取得できない場合は `display_name` に `package_name` を保存します。
 
 ## セッション生成ルール
 

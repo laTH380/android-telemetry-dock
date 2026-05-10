@@ -1,3 +1,11 @@
+Metadata-Version: 2.4
+Name: android-telemetry-dock
+Version: 0.1.0
+Summary: Local Android usage telemetry API and SQLite store
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: PyYAML>=6.0.1
+
 # Android Telemetry Dock
 
 Android Telemetry Dock は、自宅 PC 上で常駐するローカル API と、Android 端末側の軽量アプリで構成するスマホ利用履歴収集システムです。
@@ -36,12 +44,6 @@ Android 側:
 Copy-Item config.example.yaml config.yaml
 New-Item -ItemType Directory -Force data
 uv run android-telemetry-dock --serve-api --api-host 0.0.0.0 --api-port 8080 --api-token local-token --config config.yaml
-```
-
-付属スクリプトから起動する場合:
-
-```powershell
-.\scripts\start-local.ps1
 ```
 
 疎通確認:
